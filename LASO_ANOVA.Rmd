@@ -1,0 +1,160 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+
+
+```{r}
+library(readr)  
+library(dplyr)    
+library(stats)
+library(tidyverse)
+metab_data <- read_csv("C:/Users/shrra/Downloads/MASH_ML/stat/featuresforstat_newmash.csv")
+
+summary(metab_data)
+print("data loaded")
+
+```
+
+
+
+
+
+
+#Laso
+```{r}
+predictor_names <- names(metab_data)[names(metab_data) != "MASH"]
+library(glmnet)
+print(length(metab_data[predictor_names]))
+
+# Assuming your predictors and target variable are correctly formatted as matrices
+x <- as.matrix(metab_data[predictor_names])
+y <- metab_data$MASH
+
+# Fit lasso model
+lasso_model <- glmnet(x, y, alpha = 1)  # alpha = 1 for lasso
+plot(lasso_model)
+
+# Cross-validation to find optimal lambda
+cv_model <- cv.glmnet(x, y, alpha = 1)
+plot(cv_model)
+best_lambda <- cv_model$lambda.min
+
+# Coefficients at the best lambda
+library(glmnet)
+coef_lasso <- coef(cv_model, s = "lambda.min")
+coef_lasso
+
+
+# Convert to a regular vector with names
+coef_vector <- as.vector(coef_lasso)
+
+
+names(coef_vector) <- rownames(coef_lasso)
+
+# List of predictors with exactly zero coefficients
+zero_coeff_predictors <- names(coef_vector)[coef_vector == 0]
+
+# List of predictors with non-zero coefficients
+non_zero_coeff_predictors <- names(coef_vector)[coef_vector != 0]
+
+# Print or use the lists
+print("Predictors with Zero Coefficients:")
+print(length(zero_coeff_predictors))
+
+print("Predictors with Non-Zero Coefficients:")
+print(length(non_zero_coeff_predictors))
+
+```
+
+
+
+#lasso results to csv
+```{r}
+coef_df <- as.data.frame(as.matrix(coef_lasso))
+
+# Optionally, rename the columns for clarity
+colnames(coef_df) <- c("Coefficient")
+
+# Save the coefficients to a CSV file
+write.csv(coef_df, file = "C:/Users/shrra/Downloads/MASH_ML/stat/newmash_lasso_coefficients.csv", row.names = TRUE)
+```
+
+
+
+#Check first record
+
+```{r}
+
+# Example with a single predictor to test the setup
+predictor <- non_zero_coeff_predictors[1]  # Take the first non-zero predictor for testing
+predictor
+# Filter out 'Intercept' from the list of non-zero predictors
+non_zero_coeff_predictors <- non_zero_coeff_predictors[non_zero_coeff_predictors != "(Intercept)"]
+
+
+```
+
+
+#anova for selected togetehr
+```{r}
+library(car)
+
+non_zero_coeff_predictors
+selected_cols <- c(non_zero_coeff_predictors, "MASH")
+new_metab_data <- metab_data <- metab_data[, colnames(metab_data) %in% selected_cols]
+new_metab_data
+
+
+predictor_names_backticked <- sapply(non_zero_coeff_predictors, function(name) sprintf("`%s`", name))
+
+# Assuming you have a list of predictor names that might require backticks
+# Let's construct the formula with all predictors included
+all_predictors <- paste(predictor_names_backticked, collapse = " + ")
+
+
+full_formula_str <- paste("MASH ~", all_predictors)
+
+# Fit the linear model with all predictors
+full_model <- lm(as.formula(full_formula_str), data = new_metab_data)
+
+# Perform ANOVA on the full model
+full_anova_result <- Anova(full_model, type = "II")  # Type II sum of squares
+
+
+str(full_anova_result)
+
+
+anova_df <- summary(full_anova_result)
+
+# Sort the ANOVA results by the F-value in descending order
+sorted_anova <- full_anova_result[order(-full_anova_result$`F value`),]
+
+count_significant <- sum(sorted_anova$`Pr(>F)` < 0.05, na.rm = TRUE)  # Ensure to use the correct column name for p-values
+
+# Print the count of significant predictors
+cat("Number of predictors with p-values less than 0.05:", count_significant, "\n")
+# Print the sorted results to see the most significant predictors at the top
+print(sorted_anova)
+
+
+```
+
+
+#annova results to csv
+```{r}
+anova_df <- as.data.frame(as.matrix(sorted_anova))
+
+# Save the coefficients to a CSV file
+write.csv(anova_df, file = "C:/Users/shrra/Downloads/MASH_ML/stat/newmash_anova sorted.csv", row.names = TRUE)
+```
+
+
+
+
+

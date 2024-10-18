@@ -1,0 +1,60 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+This is an [R Markdown](http://rmarkdown.rstudio.com) Notebook. When you execute code within the notebook, the results appear beneath the code. 
+
+Try executing this chunk by clicking the *Run* button within the chunk or by placing your cursor inside it and pressing *Ctrl+Shift+Enter*. 
+
+```{r}
+library(readr)  
+library(dplyr)    
+library(stats)
+library(tidyverse)
+metab_data <- read_csv("C:/Users/shrra/Downloads/MASH_ML/stat/featuresforstat_newmash.csv")
+
+summary(metab_data)
+print("hi")
+
+```
+
+
+
+```{r}
+# Specify the target variable name
+target_variable <- "MASH"  # replace with the actual name of your target variable
+
+results <- data.frame(Feature = character(), P_Value = numeric(), stringsAsFactors = FALSE)
+
+
+# Loop through numerical features, excluding the target variable
+for (feature in setdiff(names(metab_data)[sapply(metab_data, is.numeric)], target_variable)) {
+    test <- wilcox.test(metab_data[[feature]] ~ metab_data[[target_variable]])
+    results <- rbind(results, data.frame(Feature = feature, P_Value = test$p.value))
+}
+
+
+print(results)
+
+results$Adjusted_P_Value <- p.adjust(results$P_Value, method = "BH")
+
+top_significant_features <- results %>%
+    filter(Adjusted_P_Value < 0.05) %>%
+    arrange(Adjusted_P_Value) %>%
+    head(50) 
+
+
+# Filter significant features
+significant_features <- results %>%
+    filter(Adjusted_P_Value < 0.05) %>%
+    arrange(Adjusted_P_Value)
+
+# Print significant features
+print(significant_features)
+
+
+write.csv(top_significant_features, file = "C:/Users/shrra/Downloads/MASH_ML/stat/newmash_Wilcoxon_withNA.csv", row.names = TRUE)
+
+```
+
